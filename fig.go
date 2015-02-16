@@ -30,6 +30,7 @@ func parseYmlFile(filename string) Services {
 	}
 	for name, service := range services {
 		service.Name = name
+		services[name] = service
 	}
 	return services
 }

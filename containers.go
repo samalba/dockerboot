@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/samalba/dockerclient"
 	"github.com/flynn/go-shlex"
+	"github.com/samalba/dockerclient"
 )
 
 func loadCurrentServicesState(dc *dockerclient.DockerClient, c *Config) (Services, error) {
@@ -59,8 +59,8 @@ func parsePorts(portsStr []string) (map[string][]dockerclient.PortBinding, error
 		if lnP == 3 {
 			portBinding.HostIp = p[0]
 		}
-		portBinding.HostPort = p[lnP - 2]
-		portName := p[lnP - 1]
+		portBinding.HostPort = p[lnP-2]
+		portName := p[lnP-1]
 		if strings.Contains(portName, "/") {
 			pN := strings.SplitN(portName, "/", 2)
 			if pN[1] != "udp" {
@@ -84,17 +84,17 @@ func createService(service Service, dc *dockerclient.DockerClient) error {
 		return err
 	}
 	containerConfig := &dockerclient.ContainerConfig{
-		Tty: true,
+		Tty:       true,
 		OpenStdin: true,
-		Cmd: cmd,
-		Image: service.Image,
+		Cmd:       cmd,
+		Image:     service.Image,
 	}
 	ports, err := parsePorts(service.Ports)
 	if err != nil {
 		return err
 	}
 	hostConfig := &dockerclient.HostConfig{
-		Binds: service.Volumes,
+		Binds:        service.Volumes,
 		PortBindings: ports,
 	}
 	log.Printf("Creating service `%s'", service.Name)

@@ -16,7 +16,10 @@ type Config struct {
 func configDefault(fieldName string) string {
 	c := Config{}
 	st := reflect.TypeOf(c)
-	field, found := st.FieldByName(fieldName)
+	matchFieldName := func(name string) bool {
+		return strings.ToLower(name) == strings.ToLower(fieldName)
+	}
+	field, found := st.FieldByNameFunc(matchFieldName)
 	if !found {
 		log.Printf("Invalid config variable `%s'", fieldName)
 		return ""
@@ -34,13 +37,13 @@ func readConfigEnvVar(key string, configVar *string) {
 }
 
 func readConfigFromEnv(config *Config) {
-	readConfigEnvVar("FigFile", &config.FigFile)
-	readConfigEnvVar("DockerUrl", &config.DockerUrl)
+	readConfigEnvVar("figfile", &config.FigFile)
+	readConfigEnvVar("dockerurl", &config.DockerUrl)
 }
 
 func readConfigFromFlags(config *Config) {
-	flag.StringVar(&config.FigFile, "f", configDefault("FigFile"), "Fig yaml file to read the services config from")
-	flag.StringVar(&config.DockerUrl, "H", configDefault("DockerUrl"), "URL of the docker daemon")
+	flag.StringVar(&config.FigFile, "f", configDefault("figfile"), "Fig yaml file to read the services config from")
+	flag.StringVar(&config.DockerUrl, "H", configDefault("dockerurl"), "URL of the docker daemon")
 	flag.Parse()
 }
 

@@ -10,7 +10,15 @@ import (
 	"github.com/samalba/dockerclient"
 )
 
-func loadCurrentServicesState(dc *dockerclient.DockerClient, c *Config) (Services, error) {
+func initDockerClient(config *Config) (*dockerclient.DockerClient, error) {
+	dc, err := dockerclient.NewDockerClient(config.DockerUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+	return dc, nil
+}
+
+func loadCurrentServicesState(c *Config, dc *dockerclient.DockerClient) (Services, error) {
 	services := make(Services)
 	containers, err := dc.ListContainers(true, false, "")
 	if err != nil {
@@ -77,7 +85,7 @@ func parsePorts(portsStr []string) (map[string][]dockerclient.PortBinding, error
 	return ports, nil
 }
 
-func createService(service Service, dc *dockerclient.DockerClient) error {
+func createService(dc *dockerclient.DockerClient, service *Service) error {
 	// Parse command
 	cmd, err := shlex.Split(service.Command)
 	if err != nil {
@@ -89,6 +97,16 @@ func createService(service Service, dc *dockerclient.DockerClient) error {
 		Cmd:       cmd,
 		Image:     service.Image,
 	}
+	log.Printf("Creating service `%s'...", service.Name)
+	containerId, err := dc.CreateContainer(containerConfig, service.Name)
+	if err != nil {
+		return err
+	}
+	service.id = containerId
+	return nil
+}
+
+func startService(dc *dockerclient.DockerClient, service *Service) error {
 	ports, err := parsePorts(service.Ports)
 	if err != nil {
 		return err
@@ -97,34 +115,29 @@ func createService(service Service, dc *dockerclient.DockerClient) error {
 		Binds:        service.Volumes,
 		PortBindings: ports,
 	}
-	log.Printf("Creating service `%s'", service.Name)
-	containerId, err := dc.CreateContainer(containerConfig, service.Name)
-	if err != nil {
+	log.Printf("Starting service `%s'...", service.Name)
+	if err = dc.StartContainer(service.id, hostConfig); err != nil {
 		return err
 	}
-	service.id = containerId
-	if err = dc.StartContainer(containerId, hostConfig); err != nil {
-		return err
-	}
-	return err
+	return nil
 }
 
-func runNewServicesState(config *Config, newServices *Services) error {
-	dc, err := dockerclient.NewDockerClient(config.DockerUrl, nil)
-	if err != nil {
-		return fmt.Errorf("Cannot connect to the docker daemon (%s): %s", config.DockerUrl, err)
-	}
-	currentServices, err := loadCurrentServicesState(dc, config)
-	if err != nil {
-		return err
-	}
-	for newServiceName, newService := range *newServices {
+func startServices(config *Config,
+	dc *dockerclient.DockerClient,
+	currentServices Services,
+	newServices Services) error {
+	for newServiceName, newService := range newServices {
 		currentService, exists := currentServices[newServiceName]
 		if exists {
 			newService.id = currentService.id
 			if reflect.DeepEqual(currentService, newService) {
-				// Existing service is equal to the new one, do nothing
+				// Existing service is equal to the new one, do nothing...
 				log.Printf("Service `%s' does not change", newServiceName)
+				// ...other than starting it
+				if err := startService(dc, &newService); err != nil {
+					log.Printf("Cannot start Service `%s': %s", newServiceName, err)
+					continue
+				}
 				continue
 			}
 			// New service is different, assuming a conf update, removing...
@@ -133,12 +146,29 @@ func runNewServicesState(config *Config, newServices *Services) error {
 			dc.RemoveContainer(currentService.id, true)
 		}
 		// Create new Service
-		if err := createService(newService, dc); err != nil {
+		if err := createService(dc, &newService); err != nil {
 			log.Printf("Cannot create Service `%s': %s", newServiceName, err)
 			continue
 		}
+		// Start the service
+		if err := startService(dc, &newService); err != nil {
+			log.Printf("Cannot start Service `%s': %s", newServiceName, err)
+			continue
+		}
 	}
-	//Look for changes between newServices and currentServices
-	//Fetch what needs to be removed, what needs to be added, what needs to be modified
+	return nil
+}
+
+func stopServices(config *Config,
+	dc *dockerclient.DockerClient,
+	currentServices Services,
+	newServices Services) error {
+	for newServiceName, _ := range newServices {
+		currentService, exists := currentServices[newServiceName]
+		if exists {
+			log.Printf("Stopping service `%s'...", newServiceName)
+			dc.StopContainer(currentService.id, 5)
+		}
+	}
 	return nil
 }

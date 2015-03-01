@@ -28,7 +28,7 @@ func configDefault(fieldName string) string {
 }
 
 func readConfigEnvVar(key string, configVar *string) {
-	val := os.Getenv(strings.ToUpper(key))
+	val := os.Getenv("DOCKERBOOT_" + strings.ToUpper(key))
 	if val == "" {
 		*configVar = configDefault(key)
 		return

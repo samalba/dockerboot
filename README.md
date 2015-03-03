@@ -1,5 +1,7 @@
 # dockerboot
 
+**Disclaimer**: This is an experimental re-implementation of a subset of [Docker Compose](https://github.com/docker/compose).
+
 Boot your machine with a simple fig.yml file and docker.
 
 ## How to use?
